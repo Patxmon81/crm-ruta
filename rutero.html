@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Rutas — Rutero</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CRM Rutas">
+  <link rel="apple-touch-icon" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="page-header">
+    <div style="flex:1">
+      <h1>Rutero semanal</h1>
+      <p class="text-muted fs-sm" id="semanaLabel"></p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-btn" data-dia="lunes"      onclick="cambiarDia('lunes')">Lun</button>
+      <button class="tab-btn" data-dia="martes"     onclick="cambiarDia('martes')">Mar</button>
+      <button class="tab-btn" data-dia="miercoles"  onclick="cambiarDia('miercoles')">Mié</button>
+      <button class="tab-btn" data-dia="jueves"     onclick="cambiarDia('jueves')">Jue</button>
+      <button class="tab-btn" data-dia="pendientes" onclick="cambiarDia('pendientes')" id="tabPendientes">
+        Pend<span class="pend-badge" id="pendBadge" style="display:none">0</span>
+      </button>
+    </div>
+
+    <div id="listaRutero">
+      <div class="loader"><div class="spinner"></div> Cargando...</div>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a href="index.html"     class="nav-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Inicio
+    </a>
+    <a href="rutero.html"    class="nav-item active">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Rutero
+    </a>
+    <a href="clientes.html"  class="nav-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Clientes
+    </a>
+    <a href="visita.html"    class="nav-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Visita
+    </a>
+    <a href="historial.html" class="nav-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Historial
+    </a>
+  </nav>
+
+  <script src="config.js"></script>
+  <script src="js/db.js"></script>
+  <script>
+
+    // ── Estado global ──────────────────────────────────────
+    let clientesActivos = [];
+    let diaActivo       = null;
+    let visitasHoyMap   = {};
+    let visitasSemMap   = {};   // visitas de toda la semana por cliente_id
+    let pendientesSet   = new Set(); // cliente_ids con pendiente esta semana
+    let guardandoOrden  = false;
+
+    // ── Init ───────────────────────────────────────────────
+    async function init() {
+      const lunes  = new Date(getLunesISO());
+      const jueves = new Date(lunes); jueves.setDate(lunes.getDate() + 3);
+      document.getElementById('semanaLabel').textContent =
+        lunes.toLocaleDateString('es-ES',{day:'numeric',month:'short'}) + ' – ' +
+        jueves.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'});
+
+      // Punto verde en tab de hoy
+      const hoy = diaSemanaHoy();
+      document.querySelectorAll('.tab-btn[data-dia]').forEach(btn => {
+        if (btn.dataset.dia === hoy) {
+          const dot = document.createElement('span');
+          dot.className = 'hoy-dot';
+          btn.insertBefore(dot, btn.firstChild);
+        }
+      });
+
+      await refrescarEstado();
+
+      const inicial = ['lunes','martes','miercoles','jueves'].includes(hoy) ? hoy : 'lunes';
+      cambiarDia(inicial);
+    }
+
+    async function refrescarEstado() {
+      // Visitas de hoy
+      const visHoy = await dbGetVisitasHoy();
+      visitasHoyMap = {};
+      visHoy.forEach(v => { visitasHoyMap[v.cliente_id] = v; });
+
+      // Visitas de toda la semana
+      const visSem = await dbGetVisitasRango(getLunesISO(), hoyISO());
+      visitasSemMap = {};
+      visSem.forEach(v => { visitasSemMap[v.cliente_id] = v; });
+
+      // Pendientes
+      const pends = await dbGetPendientesSemana();
+      pendientesSet = new Set(pends.map(p => p.cliente_id));
+
+      // Badge en tab pendientes
+      const count = dbGetCountPendientes();
+      const badge = document.getElementById('pendBadge');
+      if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'inline-flex' : 'none';
+      }
+    }
+
+    // ── Cambiar tab ────────────────────────────────────────
+    async function cambiarDia(dia) {
+      diaActivo = dia;
+      document.querySelectorAll('.tab-btn').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.dia === dia)
+      );
+      const lista = document.getElementById('listaRutero');
+      lista.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+
+      if (dia === 'pendientes') {
+        await renderPendientes();
+      } else {
+        try {
+          clientesActivos = await dbGetClientesPorDia(dia);
+          renderRutero();
+        } catch(e) {
+          lista.innerHTML = `<div class="loader" style="color:var(--danger)">${e.message}</div>`;
+        }
+      }
+    }
+
+    // ── Render día normal ──────────────────────────────────
+    function renderRutero() {
+      const lista  = document.getElementById('listaRutero');
+      const esHoy  = diaSemanaHoy() === diaActivo;
+      const DIA_LABELS = { lunes:'Lunes', martes:'Martes', miercoles:'Miércoles', jueves:'Jueves' };
+
+      if (!clientesActivos.length) {
+        lista.innerHTML = `
+          <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <p>Sin clientes para ${DIA_LABELS[diaActivo]}.<br>
+            <a href="clientes.html" style="color:var(--accent)">Asigna días en la ficha</a></p>
+          </div>`;
+        return;
+      }
+
+      // Stats del día (solo si es hoy)
+      let headerHtml = '';
+      if (esHoy) {
+        const visitados  = clientesActivos.filter(c => !c.es_telefono && visitasHoyMap[c.id]).length;
+        const visitTotal = clientesActivos.filter(c => !c.es_telefono).length;
+        const compraron  = clientesActivos.filter(c => !c.es_telefono && visitasHoyMap[c.id]?.compro).length;
+        const totalVenta = clientesActivos.reduce((s, c) => s + Number(visitasHoyMap[c.id]?.importe || 0), 0);
+        headerHtml = `
+          <div class="stats-grid mb-16">
+            <div class="stat-card">
+              <div class="stat-val">${visitados}/${visitTotal}</div>
+              <div class="stat-lbl">Visitados</div>
+            </div>
+            <div class="stat-card success">
+              <div class="stat-val text-success">${visitados > 0 ? Math.round(compraron/visitados*100) : 0}%</div>
+              <div class="stat-lbl">Efectividad</div>
+            </div>
+            <div class="stat-card accent">
+              <div class="stat-val text-accent" style="font-size:1rem">${formatImporte(totalVenta)}</div>
+              <div class="stat-lbl">Vendido</div>
+            </div>
+          </div>`;
+      }
+
+      const hint = `<p class="text-muted fs-sm" style="text-align:center;padding:0 0 8px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+        Arrastra para reordenar</p>`;
+
+      lista.innerHTML = headerHtml + hint + `<div class="item-list" id="sortableList">
+        ${clientesActivos.map((c, i) => buildClienteRow(c, i, esHoy)).join('')}
+      </div>`;
+
+      bindSortable();
+    }
+
+    // ── Construir fila de un cliente ───────────────────────
+    function buildClienteRow(c, i, esHoy) {
+      const esTel     = c.es_telefono;
+      const isPend    = pendientesSet.has(c.id);
+      const visitaHoy = visitasHoyMap[c.id];
+      const tieneSem  = !!visitasSemMap[c.id];
+
+      const dotClass  = visitaHoy
+        ? (visitaHoy.compro ? 'bought' : 'no-buy')
+        : (isPend ? 'no-buy' : 'pending');
+
+      let accionHtml = '';
+      let rowExtra   = '';
+
+      if (esHoy || tieneSem) {
+        if (visitaHoy || tieneSem) {
+          const v = visitaHoy || visitasSemMap[c.id];
+          accionHtml = `<div class="row-btns" style="align-items:center">
+            <span class="status-dot ${v.compro ? 'bought' : 'no-buy'}"></span>
+            <span class="chip ${v.compro ? 'chip-success' : 'chip-danger'}" style="font-size:.7rem">
+              ${v.compro ? '✓ ' + formatImporte(v.importe) : '✗ No'}
+            </span>
+          </div>`;
+        } else if (isPend) {
+          accionHtml = `<div class="row-btns" style="align-items:center">
+            <span class="status-dot no-buy"></span>
+            <span class="chip chip-warning" style="font-size:.65rem">⚠ Pend.</span>
+            <a href="visita.html?cliente=${c.id}" class="btn btn-primary btn-xs">+</a>
+          </div>`;
+        } else {
+          rowExtra = 'wrap-actions';
+          accionHtml = `<div class="row-btns" style="align-items:center">
+            <span class="status-dot pending"></span>
+            <a href="visita.html?cliente=${c.id}" class="btn btn-primary btn-xs">
+              ${esTel ? '📞 Pedido' : 'Visita'}
+            </a>
+            <button class="btn btn-ghost btn-xs"
+              style="border-color:var(--warning);color:var(--warning)"
+              onclick="marcarNoPedido('${c.id}')">Pend.</button>
+          </div>`;
+        }
+      }
+
+      return `
+        <div class="item-row ${rowExtra}" data-id="${c.id}" data-idx="${i}">
+          <div class="drag-handle" title="Arrastra para reordenar">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <circle cx="4.5" cy="3" r="1.3"/><circle cx="9.5" cy="3" r="1.3"/>
+              <circle cx="4.5" cy="7" r="1.3"/><circle cx="9.5" cy="7" r="1.3"/>
+              <circle cx="4.5" cy="11" r="1.3"/><circle cx="9.5" cy="11" r="1.3"/>
+            </svg>
+          </div>
+          <div class="order-badge" id="badge-${c.id}">${i + 1}</div>
+          <div class="item-info">
+            <div class="item-name">${esTel ? '📞 ' : ''}${escHtml(c.nombre)}</div>
+            <div class="item-sub">${c.codigo_cliente}${c.telefono ? ' · ' + c.telefono : ''}</div>
+          </div>
+          ${accionHtml}
+        </div>`;
+    }
+
+    // ── Render pestaña Pendientes ──────────────────────────
+    async function renderPendientes() {
+      const lista = document.getElementById('listaRutero');
+      const pendientes = await dbGetPendientesSemana();
+
+      if (!pendientes.length) {
+        lista.innerHTML = `
+          <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <p style="color:var(--success);font-weight:600">¡Sin pendientes esta semana!</p>
+            <p style="font-size:.8rem;margin-top:4px">Todos los clientes telefónicos han pasado su pedido.</p>
+          </div>`;
+        return;
+      }
+
+      const DIA_LABEL_SHORT = { lunes:'Lun', martes:'Mar', miercoles:'Mié', jueves:'Jue' };
+
+      lista.innerHTML = `
+        <div class="card mb-16" style="border-color:var(--warning);background:rgba(245,158,11,.05)">
+          <p class="text-muted fs-sm" style="color:var(--warning)">
+            <strong>${pendientes.length} cliente${pendientes.length > 1 ? 's' : ''}</strong>
+            sin pedido esta semana. Márcalos como resueltos cuando llamen.
+          </p>
+        </div>
+        <div class="item-list">
+          ${pendientes.map(p => {
+            const c    = p.cliente;
+            const dias = (c.dias_visita || []).map(d => DIA_LABEL_SHORT[d] || d).join(', ');
+            return `
+              <div class="item-row" id="prow-${p.id}">
+                <div style="width:28px;flex-shrink:0;color:var(--warning);font-size:1.1rem;text-align:center">⚠</div>
+                <div class="item-info">
+                  <div class="item-name">📞 ${escHtml(c.nombre)}</div>
+                  <div class="item-sub">${c.codigo_cliente}
+                    ${c.telefono ? ` · <strong style="color:var(--text)">${c.telefono}</strong>` : ''}
+                    ${dias ? ` · Días: ${dias}` : ''}
+                  </div>
+                  <div class="item-sub" style="color:var(--warning);margin-top:2px">Sin pedido desde el ${formatFecha(p.fecha)}</div>
+                </div>
+                <button class="btn btn-success btn-xs"
+                  onclick="resolverPendiente('${p.cliente_id}', '${p.id}')">
+                  ✓ Hizo pedido
+                </button>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    // ── Acciones pendientes ────────────────────────────────
+    async function marcarNoPedido(clienteId) {
+      dbMarcarPendiente(clienteId);
+      await refrescarEstado();
+      renderRutero();
+      showToast('Marcado como pendiente');
+    }
+
+    async function resolverPendiente(clienteId, pendId) {
+      dbResolverPendiente(clienteId);
+      await refrescarEstado();
+      // Eliminar fila con animación
+      const row = document.getElementById('prow-' + pendId);
+      if (row) { row.style.opacity = '0'; row.style.transition = 'opacity .3s'; }
+      setTimeout(() => cambiarDia('pendientes'), 350);
+      showToast('Pedido resuelto ✓');
+    }
+
+    // ── Drag & Drop (ratón + táctil) ───────────────────────
+    function bindSortable() {
+      const lista = document.getElementById('sortableList');
+      if (!lista) return;
+      const rows = () => [...lista.querySelectorAll('.item-row')];
+      let dragSrcIdx = -1;
+      let touchGhost = null, touchSrcEl = null, touchSrcIdx = -1;
+      let ghostInitTop = 0, touchStartY = 0;
+
+      // Mouse
+      lista.addEventListener('dragstart', e => {
+        const row = e.target.closest('.item-row');
+        if (!row) return;
+        dragSrcIdx = rows().indexOf(row);
+        e.dataTransfer.effectAllowed = 'move';
+        requestAnimationFrame(() => row.classList.add('dragging'));
+      });
+      lista.addEventListener('dragend', e => {
+        const row = e.target.closest('.item-row');
+        if (row) row.classList.remove('dragging');
+        rows().forEach(r => r.classList.remove('drag-over'));
+        dragSrcIdx = -1;
+      });
+      lista.addEventListener('dragover', e => {
+        e.preventDefault();
+        const row = e.target.closest('.item-row');
+        if (!row) return;
+        rows().forEach(r => r.classList.remove('drag-over'));
+        if (rows().indexOf(row) !== dragSrcIdx) row.classList.add('drag-over');
+      });
+      lista.addEventListener('drop', e => {
+        e.preventDefault();
+        const row = e.target.closest('.item-row');
+        if (!row || dragSrcIdx < 0) return;
+        const dst = rows().indexOf(row);
+        if (dst !== dragSrcIdx) reorder(dragSrcIdx, dst);
+      });
+      rows().forEach(r => r.setAttribute('draggable', 'true'));
+
+      // Touch
+      lista.addEventListener('touchstart', e => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        e.preventDefault();
+        const row  = handle.closest('.item-row');
+        const rect = row.getBoundingClientRect();
+        const t    = e.touches[0];
+        touchSrcEl    = row;
+        touchSrcIdx   = rows().indexOf(row);
+        touchStartY   = t.clientY;
+        ghostInitTop  = rect.top;
+        touchGhost    = row.cloneNode(true);
+        Object.assign(touchGhost.style, {
+          position:'fixed', left:rect.left+'px', width:rect.width+'px',
+          top:ghostInitTop+'px', zIndex:'999', opacity:'.9',
+          pointerEvents:'none', boxShadow:'0 8px 28px rgba(0,0,0,.5)',
+          border:'1px solid var(--accent)', borderRadius:'8px', transition:'none'
+        });
+        document.body.appendChild(touchGhost);
+        row.classList.add('dragging');
+      }, { passive: false });
+
+      lista.addEventListener('touchmove', e => {
+        if (!touchGhost) return;
+        e.preventDefault();
+        const t  = e.touches[0];
+        touchGhost.style.top = (ghostInitTop + t.clientY - touchStartY) + 'px';
+        rows().forEach(r => r.classList.remove('drag-over'));
+        const below = document.elementFromPoint(t.clientX, t.clientY);
+        const tr    = below?.closest('.item-row');
+        if (tr && tr !== touchSrcEl) tr.classList.add('drag-over');
+      }, { passive: false });
+
+      lista.addEventListener('touchend', e => {
+        if (!touchGhost) return;
+        const t   = e.changedTouches[0];
+        const below = document.elementFromPoint(t.clientX, t.clientY);
+        const tr    = below?.closest('.item-row');
+        touchGhost.remove(); touchGhost = null;
+        touchSrcEl.classList.remove('dragging');
+        rows().forEach(r => r.classList.remove('drag-over'));
+        if (tr && tr !== touchSrcEl) {
+          const dst = rows().indexOf(tr);
+          if (touchSrcIdx >= 0 && dst >= 0) reorder(touchSrcIdx, dst);
+        }
+        touchSrcEl = null; touchSrcIdx = -1;
+      }, { passive: false });
+    }
+
+    // ── Reordenar y guardar ────────────────────────────────
+    function reorder(from, to) {
+      const [moved] = clientesActivos.splice(from, 1);
+      clientesActivos.splice(to, 0, moved);
+      clientesActivos.forEach((c, i) => {
+        const badge = document.getElementById('badge-' + c.id);
+        if (badge) badge.textContent = i + 1;
+      });
+      guardarOrden();
+    }
+
+    async function guardarOrden() {
+      if (guardandoOrden) return;
+      guardandoOrden = true;
+      try {
+        for (let i = 0; i < clientesActivos.length; i++) {
+          clientesActivos[i].orden_ruta = i + 1;
+          await dbUpdateCliente(clientesActivos[i].id, { orden_ruta: i + 1 });
+        }
+        renderRutero();
+        showToast('Orden guardado');
+      } catch(e) {
+        showToast('Error: ' + e.message, 'error');
+      } finally {
+        guardandoOrden = false;
+      }
+    }
+
+    function escHtml(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    init();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+  </script>
+</body>
+</html>

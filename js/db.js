@@ -332,6 +332,7 @@ async function dbGetRankingClientesMes(mesISO) {
   const [y, m]   = mesISO.split('-');
   const fin      = new Date(parseInt(y), parseInt(m), 0).toISOString().split('T')[0];
   const hasta    = fin < hoyISO() ? fin : hoyISO();
+  const cIds     = _getCervezaIds();
 
   const visitas = _load(DB_VISITAS).filter(v => v.fecha >= inicio && v.fecha <= hasta);
 
@@ -340,7 +341,10 @@ async function dbGetRankingClientesMes(mesISO) {
     importeMap[v.cliente_id] = (importeMap[v.cliente_id] || 0) + Number(v.importe || 0);
   }
 
-  const totalGlobal = Object.values(importeMap).reduce((s, v) => s + v, 0);
+  // Total excluye cerveza, igual que el dashboard, para que los números coincidan
+  const totalGlobal = Object.entries(importeMap)
+    .filter(([id]) => !cIds.has(id))
+    .reduce((s, [, v]) => s + v, 0);
 
   const ranking = clientes
     .map(c => ({ ...c, totalMes: importeMap[c.id] || 0 }))

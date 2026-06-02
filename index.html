@@ -264,7 +264,8 @@
             }
 
             return `
-              <div class="item-row ${rowExtra}" id="drow-${c.id}">
+              <div class="item-row ${rowExtra}" id="drow-${c.id}" style="cursor:pointer"
+                   onclick="if(!event.target.closest('button,a'))location.href='visita.html?cliente=${c.id}'">
                 <div class="order-badge">${c.orden_ruta || '?'}</div>
                 <div class="item-info">
                   <div class="item-name">${esTel ? '📞 ' : ''}${escHtml(c.nombre)}</div>

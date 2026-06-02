@@ -22,6 +22,9 @@ async function iniciarVisita() {
   document.getElementById('fFecha').value = hoyISO();
 }
 
+// Cache de clientes por hiddenId para permitir preselección sin abrir el dropdown
+const _clientesCache = {};
+
 // Configura el combo de búsqueda de clientes
 async function cargarClientesSelect(hiddenId, inputId, dropdownId) {
   const input    = document.getElementById(inputId);
@@ -32,6 +35,7 @@ async function cargarClientesSelect(hiddenId, inputId, dropdownId) {
   let todos = [];
   try {
     todos = await dbGetClientes(true);
+    _clientesCache[hiddenId] = todos;
   } catch (e) {
     input.placeholder = 'Error al cargar clientes';
     return;
@@ -82,24 +86,21 @@ async function cargarClientesSelect(hiddenId, inputId, dropdownId) {
   });
 }
 
-// Preselecciona un cliente por ID (usado cuando viene ?cliente= en la URL)
-function _seleccionarClienteCombo(hiddenId, inputId, dropdownId, clienteId) {
-  const dropdown = document.getElementById(dropdownId);
-  const input    = document.getElementById(inputId);
-  const hidden   = document.getElementById(hiddenId);
-  if (!dropdown || !input || !hidden) return;
+// Preselecciona un cliente por ID usando el cache de datos (no el DOM del dropdown)
+function _seleccionarClienteCombo(hiddenId, inputId, _dropdownId, clienteId) {
+  const input  = document.getElementById(inputId);
+  const hidden = document.getElementById(hiddenId);
+  if (!input || !hidden) return;
 
-  // Buscar el option ya pintado
-  const opt = dropdown.querySelector(`.select-option[data-id="${clienteId}"]`);
-  if (opt) {
-    input.value  = opt.querySelector('.opt-name').textContent;
-    hidden.value = clienteId;
-    hidden.dataset.cerveza  = opt.dataset.cerveza;
-    hidden.dataset.telefono = opt.dataset.telefono;
-  } else {
-    // Si el dropdown no está abierto aún, igualmente guardamos el id
-    hidden.value = clienteId;
+  const todos = _clientesCache[hiddenId] || [];
+  const c = todos.find(cl => String(cl.id) === String(clienteId));
+  if (c) {
+    const icono = c.es_cerveza ? '🍺 ' : c.es_telefono ? '📞 ' : '';
+    input.value = `${c.orden_ruta ? c.orden_ruta + '. ' : ''}${icono}${c.nombre}`;
+    hidden.dataset.cerveza  = !!c.es_cerveza;
+    hidden.dataset.telefono = !!c.es_telefono;
   }
+  hidden.value = clienteId;
 }
 
 function _actualizarFormVisita(hiddenEl) {

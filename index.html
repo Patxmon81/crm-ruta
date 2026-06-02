@@ -76,28 +76,6 @@
       <div class="venta-card"><div class="v-val" id="ventasMes">—</div><div class="v-lbl">Mes</div></div>
     </div>
 
-    <!-- Numérica Botella (solo si hay clientes cerveza) -->
-    <div id="cervezaCard" style="display:none;
-         background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);
-         border-radius:8px;padding:12px 14px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        <span style="font-size:1.5rem;line-height:1">🍺</span>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:.9rem;color:#ca8a04;text-transform:uppercase;letter-spacing:.05em">Numérica Botella</div>
-          <div style="font-size:.75rem;color:var(--text-muted)">Clientes únicos que compraron este mes</div>
-        </div>
-        <div style="text-align:right">
-          <span style="font-size:1.6rem;font-weight:800;color:#ca8a04" id="cervezaCompraron">0</span>
-          <span style="font-size:1rem;color:var(--text-muted)">/<span id="cervezaTotal">0</span></span>
-        </div>
-      </div>
-      <!-- Barra de progreso numérica -->
-      <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
-        <div id="cervezaBar" style="height:100%;background:#ca8a04;border-radius:4px;transition:width .5s;width:0%"></div>
-      </div>
-      <div style="font-size:.7rem;color:var(--text-muted);margin-top:4px;text-align:right" id="cervezaPct">0%</div>
-    </div>
-
     <!-- Estimado mensual -->
     <p class="section-title">Estimado del mes</p>
     <div class="card" id="cardEstimado">
@@ -195,23 +173,6 @@
         document.getElementById('ventasSemana').textContent = formatImporte(resVentas.semana);
         document.getElementById('ventasMes').textContent    = formatImporte(resVentas.mes);
         renderEstimado(estimado);
-
-        // Numérica Botella
-        const cerv  = dbGetCervezaMes();
-        const cCard = document.getElementById('cervezaCard');
-        // Mostrar si hay clientes cerveza O si alguien compró botella este mes
-        if (cCard && (cerv.total > 0 || cerv.compraron > 0)) {
-          cCard.style.display = 'block';
-          const pct = cerv.total > 0 ? Math.round(cerv.compraron / cerv.total * 100) : 100;
-          document.getElementById('cervezaCompraron').textContent = cerv.compraron;
-          document.getElementById('cervezaTotal').textContent     = cerv.total > 0 ? cerv.total : '—';
-          document.getElementById('cervezaBar').style.width       = (cerv.total > 0 ? pct : 0) + '%';
-          document.getElementById('cervezaPct').textContent       = cerv.total > 0
-            ? pct + '% clientes propios'
-            : cerv.compraron + ' cliente' + (cerv.compraron !== 1 ? 's' : '') + ' compraron';
-        } else if (cCard) {
-          cCard.style.display = 'none';
-        }
 
         // Render ruta del día
         if (!clientes.length) {

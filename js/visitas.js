@@ -104,13 +104,9 @@ function _seleccionarClienteCombo(hiddenId, inputId, _dropdownId, clienteId) {
 }
 
 function _actualizarFormVisita(hiddenEl) {
-  const esCerveza   = hiddenEl.dataset.cerveza === 'true';
-  const nota        = document.getElementById('notaCerveza');
-  const cervezaWrap = document.getElementById('cervezaWrap');
-
-  // El importe siempre es visible; la nota indica que es cliente cerveza
-  if (nota)        nota.style.display        = esCerveza ? 'block' : 'none';
-  if (cervezaWrap) cervezaWrap.style.display  = esCerveza ? 'none' : 'block';
+  const esCerveza = hiddenEl.dataset.cerveza === 'true';
+  const nota      = document.getElementById('notaCerveza');
+  if (nota) nota.style.display = esCerveza ? 'block' : 'none';
 }
 
 async function guardarVisita(e) {
@@ -135,9 +131,6 @@ async function guardarVisita(e) {
     fecha:          document.getElementById('fFecha').value,
     compro,
     importe:        parseFloat(document.getElementById('fImporte').value) || 0,
-    compro_cerveza: esCerveza
-      ? compro
-      : document.getElementById('toggleCerveza').checked,
     notas: document.getElementById('fNotasVisita').value.trim() || null
   };
 
@@ -149,7 +142,7 @@ async function guardarVisita(e) {
     // Limpiar combo y restaurar visibilidad
     document.getElementById('clienteSearchInput').value = '';
     hidden.value = '';
-    delete hidden.dataset.cerveza;
+    hidden.dataset.cerveza = 'false';
     _actualizarFormVisita(hidden);
   } catch (err) {
     showToast(err.message, 'error');

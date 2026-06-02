@@ -268,40 +268,6 @@ async function dbGetHistoricoMeses(numMeses = 12) {
   return meses;
 }
 
-// ---- IDs de clientes cerveza (excluidos de ventas) ------
-
-function _getCervezaIds() {
-  return new Set(_load(DB_CLIENTES).filter(c => c.es_cerveza).map(c => c.id));
-}
-
-// ---- Estadística clientes cerveza (compraron este mes) --
-
-function dbGetCervezaMes() {
-  const hoy       = hoyISO();
-  const inicioMes = hoy.substring(0, 7) + '-01';
-  const cIds      = _getCervezaIds(); // clientes es_cerveza
-
-  const visitas   = _load(DB_VISITAS).filter(v => v.fecha >= inicioMes && v.fecha <= hoy);
-
-  // Cuenta clientes únicos que compraron botella:
-  // · Cliente es_cerveza: su campo "compro" indica la botella
-  //   (soporte a registros antiguos sin compro_cerveza)
-  // · Cualquier cliente: campo compro_cerveza = true
-  const compraron = new Set(
-    visitas
-      .filter(v =>
-        v.compro_cerveza ||
-        (cIds.has(v.cliente_id) && v.compro && v.compro_cerveza === undefined)
-      )
-      .map(v => v.cliente_id)
-  );
-
-  // Total de clientes es_cerveza (denominador de la numérica propia)
-  const totalCerveza = _load(DB_CLIENTES).filter(c => c.es_cerveza && c.activo !== false).length;
-
-  return { compraron: compraron.size, total: totalCerveza };
-}
-
 // ---- Resumen ventas (hoy / semana / mes) ----------------
 
 async function dbGetResumenVentas() {

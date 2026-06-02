@@ -171,7 +171,6 @@
         const visitadosHoy = clientes.filter(c => visitaMap[c.id]).length;
         const compraron    = clientes.filter(c => visitaMap[c.id]?.compro).length;
         const totalVenta   = clientes
-          .filter(c => !c.es_cerveza)
           .reduce((s, c) => s + Number(visitaMap[c.id]?.importe || 0), 0);
         const efectividad  = visitadosHoy > 0 ? Math.round((compraron / visitadosHoy) * 100) : 0;
 

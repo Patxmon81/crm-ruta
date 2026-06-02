@@ -177,11 +177,9 @@ async function dbGetEstimadoMes() {
   const finMes = new Date(parseInt(anyo), parseInt(mes), 0)
     .toISOString().split('T')[0];
 
-  // Ventas acumuladas este mes (excluye cerveza)
-  const cIds  = _getCervezaIds();
   const todas = _load(DB_VISITAS);
   const ventasMes = todas
-    .filter(v => v.fecha >= inicioMes && v.fecha <= hoy && !cIds.has(v.cliente_id))
+    .filter(v => v.fecha >= inicioMes && v.fecha <= hoy)
     .reduce((s, v) => s + Number(v.importe || 0), 0);
 
   // Días Lun-Jue ya transcurridos (incluyendo hoy)
@@ -197,7 +195,6 @@ async function dbGetEstimadoMes() {
 
   const totalDias    = diasPasados + diasRestantes;
   const promedioDia  = diasPasados > 0 ? ventasMes / diasPasados : 0;
-  // Nota: ventasMes ya excluye cerveza (calculado arriba con cIds)
   const estimado     = ventasMes + promedioDia * diasRestantes;
   const progreso     = totalDias > 0 ? diasPasados / totalDias : 0;
 
@@ -238,7 +235,6 @@ function dbSetObjetivo(mesISO, valor) {
 // ---- Histórico mensual ----------------------------------
 
 async function dbGetHistoricoMeses(numMeses = 12) {
-  const cIds    = _getCervezaIds();
   const visitas = _load(DB_VISITAS);
   const hoy     = hoyISO();
   const meses   = [];
@@ -253,7 +249,7 @@ async function dbGetHistoricoMeses(numMeses = 12) {
     const fin     = i === 0 ? hoy : finD.toISOString().split('T')[0];
 
     const total = visitas
-      .filter(v => v.fecha >= inicio && v.fecha <= fin && !cIds.has(v.cliente_id))
+      .filter(v => v.fecha >= inicio && v.fecha <= fin)
       .reduce((s, v) => s + Number(v.importe || 0), 0);
 
     const objetivo = dbGetObjetivo(mesISO);
@@ -313,10 +309,7 @@ async function dbGetResumenVentas() {
   const lunes     = getLunesISO();
   const inicioMes = hoy.substring(0, 7) + '-01';
   const todas     = _load(DB_VISITAS);
-  const cIds      = _getCervezaIds();
-  const suma      = arr => arr
-    .filter(v => !cIds.has(v.cliente_id))
-    .reduce((s, v) => s + Number(v.importe || 0), 0);
+  const suma      = arr => arr.reduce((s, v) => s + Number(v.importe || 0), 0);
   return {
     hoy:    suma(todas.filter(v => v.fecha === hoy)),
     semana: suma(todas.filter(v => v.fecha >= lunes && v.fecha <= hoy)),
@@ -332,7 +325,6 @@ async function dbGetRankingClientesMes(mesISO) {
   const [y, m]   = mesISO.split('-');
   const fin      = new Date(parseInt(y), parseInt(m), 0).toISOString().split('T')[0];
   const hasta    = fin < hoyISO() ? fin : hoyISO();
-  const cIds     = _getCervezaIds();
 
   const visitas = _load(DB_VISITAS).filter(v => v.fecha >= inicio && v.fecha <= hasta);
 
@@ -341,10 +333,7 @@ async function dbGetRankingClientesMes(mesISO) {
     importeMap[v.cliente_id] = (importeMap[v.cliente_id] || 0) + Number(v.importe || 0);
   }
 
-  // Total excluye cerveza, igual que el dashboard, para que los números coincidan
-  const totalGlobal = Object.entries(importeMap)
-    .filter(([id]) => !cIds.has(id))
-    .reduce((s, [, v]) => s + v, 0);
+  const totalGlobal = Object.values(importeMap).reduce((s, v) => s + v, 0);
 
   const ranking = clientes
     .map(c => ({ ...c, totalMes: importeMap[c.id] || 0 }))

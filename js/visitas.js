@@ -46,6 +46,7 @@ async function cargarClientesSelect(hiddenId, inputId, dropdownId) {
     const texto = filtro.trim().toLowerCase();
     const lista = texto
       ? todos.filter(c => c.nombre.toLowerCase().includes(texto) ||
+                         etiqueta(c).toLowerCase().includes(texto) ||
                          (c.orden_ruta && String(c.orden_ruta).startsWith(texto)))
       : todos;
 
@@ -102,14 +103,13 @@ function _seleccionarClienteCombo(hiddenId, inputId, dropdownId, clienteId) {
 }
 
 function _actualizarFormVisita(hiddenEl) {
-  const esCerveza  = hiddenEl.dataset.cerveza === 'true';
-  const wrap       = document.getElementById('importeWrap');
-  const nota       = document.getElementById('notaCerveza');
+  const esCerveza   = hiddenEl.dataset.cerveza === 'true';
+  const nota        = document.getElementById('notaCerveza');
   const cervezaWrap = document.getElementById('cervezaWrap');
 
-  if (wrap)        wrap.style.display       = esCerveza ? 'none' : 'block';
-  if (nota)        nota.style.display       = esCerveza ? 'block' : 'none';
-  if (cervezaWrap) cervezaWrap.style.display = esCerveza ? 'none' : 'block';
+  // El importe siempre es visible; la nota indica que es cliente cerveza
+  if (nota)        nota.style.display        = esCerveza ? 'block' : 'none';
+  if (cervezaWrap) cervezaWrap.style.display  = esCerveza ? 'none' : 'block';
 }
 
 async function guardarVisita(e) {
@@ -133,7 +133,7 @@ async function guardarVisita(e) {
     cliente_id:     hidden.value,
     fecha:          document.getElementById('fFecha').value,
     compro,
-    importe:        esCerveza ? 0 : (parseFloat(document.getElementById('fImporte').value) || 0),
+    importe:        parseFloat(document.getElementById('fImporte').value) || 0,
     compro_cerveza: esCerveza
       ? compro
       : document.getElementById('toggleCerveza').checked,

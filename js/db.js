@@ -324,6 +324,31 @@ async function dbGetResumenVentas() {
   };
 }
 
+// ---- Ranking de clientes por mes ------------------------
+
+async function dbGetRankingClientesMes(mesISO) {
+  const clientes = await dbGetClientes(true);
+  const inicio   = mesISO + '-01';
+  const [y, m]   = mesISO.split('-');
+  const fin      = new Date(parseInt(y), parseInt(m), 0).toISOString().split('T')[0];
+  const hasta    = fin < hoyISO() ? fin : hoyISO();
+
+  const visitas = _load(DB_VISITAS).filter(v => v.fecha >= inicio && v.fecha <= hasta);
+
+  const importeMap = {};
+  for (const v of visitas) {
+    importeMap[v.cliente_id] = (importeMap[v.cliente_id] || 0) + Number(v.importe || 0);
+  }
+
+  const totalGlobal = Object.values(importeMap).reduce((s, v) => s + v, 0);
+
+  const ranking = clientes
+    .map(c => ({ ...c, totalMes: importeMap[c.id] || 0 }))
+    .sort((a, b) => b.totalMes - a.totalMes);
+
+  return { ranking, totalGlobal };
+}
+
 // ---- Contexto para Claude --------------------------------
 
 async function dbGetResumenContexto() {

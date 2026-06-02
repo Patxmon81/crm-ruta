@@ -21,10 +21,11 @@
 
   <div class="container">
 
-    <!-- Tabs: Por mes / Por cliente -->
+    <!-- Tabs: Por mes / Por cliente / Ranking -->
     <div class="tab-bar" style="margin-bottom:16px">
-      <button class="tab-btn active" id="tabMeses"    onclick="cambiarVista('meses')">Por mes</button>
-      <button class="tab-btn"        id="tabCliente"  onclick="cambiarVista('cliente')">Por cliente</button>
+      <button class="tab-btn active" id="tabMeses"   onclick="cambiarVista('meses')">Por mes</button>
+      <button class="tab-btn"        id="tabCliente" onclick="cambiarVista('cliente')">Por cliente</button>
+      <button class="tab-btn"        id="tabRanking" onclick="cambiarVista('ranking')">Ranking</button>
     </div>
 
     <!-- Vista: Por mes -->
@@ -45,6 +46,9 @@
       </div>
       <div id="historialContenido"></div>
     </div>
+
+    <!-- Vista: Ranking por cliente -->
+    <div id="vistaRanking" style="display:none"></div>
 
   </div>
 
@@ -77,21 +81,24 @@
   <script src="js/visitas.js"></script>
   <script>
 
-    let vistaActual = 'meses';
+    let vistaActual      = 'meses';
     let clientesCargados = false;
+    let rankingMesISO    = hoyISO().substring(0, 7);
 
     // ── Tabs ──────────────────────────────────────────────
     function cambiarVista(vista) {
       vistaActual = vista;
-      document.getElementById('tabMeses').classList.toggle('active',   vista === 'meses');
-      document.getElementById('tabCliente').classList.toggle('active', vista === 'cliente');
-      document.getElementById('vistaMeses').style.display   = vista === 'meses'   ? 'block' : 'none';
-      document.getElementById('vistaCliente').style.display = vista === 'cliente' ? 'block' : 'none';
-
+      ['meses', 'cliente', 'ranking'].forEach(v => {
+        const tabId  = 'tab'   + v.charAt(0).toUpperCase() + v.slice(1);
+        const vistId = 'vista' + v.charAt(0).toUpperCase() + v.slice(1);
+        document.getElementById(tabId)?.classList.toggle('active', v === vista);
+        document.getElementById(vistId).style.display = v === vista ? 'block' : 'none';
+      });
       if (vista === 'cliente' && !clientesCargados) {
         clientesCargados = true;
         iniciarHistorial();
       }
+      if (vista === 'ranking') cargarRanking();
     }
 
     // ── Vista por mes ─────────────────────────────────────
@@ -200,6 +207,92 @@
 
     function escHtml(s) {
       return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Ranking ───────────────────────────────────────────
+    async function cargarRanking() {
+      const contenido = document.getElementById('vistaRanking');
+      contenido.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+      try {
+        const { ranking, totalGlobal } = await dbGetRankingClientesMes(rankingMesISO);
+        renderRanking(ranking, totalGlobal);
+      } catch(e) {
+        contenido.innerHTML = `<div class="loader" style="color:var(--danger)">${e.message}</div>`;
+      }
+    }
+
+    function renderRanking(ranking, totalGlobal) {
+      const contenido = document.getElementById('vistaRanking');
+
+      const mesNombre = new Date(rankingMesISO + '-15')
+        .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
+      const prevISO  = (() => {
+        const d = new Date(rankingMesISO + '-15');
+        d.setMonth(d.getMonth() - 1);
+        return d.toISOString().substring(0, 7);
+      })();
+      const nextISO  = (() => {
+        const d = new Date(rankingMesISO + '-15');
+        d.setMonth(d.getMonth() + 1);
+        return d.toISOString().substring(0, 7);
+      })();
+      const esActual  = rankingMesISO === hoyISO().substring(0, 7);
+      const conCompras = ranking.filter(c => c.totalMes > 0).length;
+
+      contenido.innerHTML = `
+        <!-- Selector de mes -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <button class="btn btn-ghost btn-sm"
+            onclick="rankingMesISO='${prevISO}';cargarRanking()">‹</button>
+          <span style="font-weight:600;font-size:.9rem;text-transform:capitalize">${mesNombre}</span>
+          <button class="btn btn-ghost btn-sm"
+            ${esActual ? 'disabled style="opacity:.3"' : `onclick="rankingMesISO='${nextISO}';cargarRanking()"`}>›</button>
+        </div>
+
+        <!-- Stats resumen -->
+        <div class="stats-grid mb-16">
+          <div class="stat-card accent">
+            <div class="stat-val text-accent" style="font-size:clamp(.7rem,4.5vw,1.2rem)">${formatImporte(totalGlobal)}</div>
+            <div class="stat-lbl">Facturación</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-val text-success">${conCompras}</div>
+            <div class="stat-lbl">Con compras</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val">${ranking.length}</div>
+            <div class="stat-lbl">Clientes</div>
+          </div>
+        </div>
+
+        <!-- Lista -->
+        <div class="item-list">
+          ${ranking.map((c, i) => {
+            const pct      = totalGlobal > 0 ? c.totalMes / totalGlobal * 100 : 0;
+            const pctStr   = pct >= 0.05 ? pct.toFixed(1) + '%' : '0%';
+            const icono    = c.es_cerveza ? '🍺 ' : c.es_telefono ? '📞 ' : '';
+            const activo   = c.totalMes > 0;
+            return `
+              <div class="item-row" style="align-items:center;gap:10px">
+                <div class="order-badge"
+                  style="${activo ? 'background:var(--accent);color:#fff' : 'opacity:.35'}">${i + 1}</div>
+                <div class="item-info" style="flex:1;min-width:0">
+                  <div class="item-name"
+                    style="${activo ? '' : 'color:var(--text-muted)'}">${icono}${escHtml(c.nombre)}</div>
+                  <div style="margin-top:5px;background:var(--bg);border-radius:3px;height:4px;overflow:hidden">
+                    <div style="height:100%;width:${pct.toFixed(2)}%;background:var(--accent);
+                                border-radius:3px;transition:width .5s"></div>
+                  </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;min-width:76px">
+                  <div style="font-weight:700;font-size:.9rem;
+                    ${activo ? '' : 'color:var(--text-muted)'}">${formatImporte(c.totalMes)}</div>
+                  <div style="font-size:.7rem;color:var(--text-muted)">${pctStr}</div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
     }
 
     // Arrancar por la vista de meses

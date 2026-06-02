@@ -5,52 +5,110 @@
 // ---- VISITA.HTML --------------------------------------
 
 async function iniciarVisita() {
-  await cargarClientesSelect('selectCliente');
+  await cargarClientesSelect('selectCliente', 'clienteSearchInput', 'clienteDropdown');
 
-  const sel = document.getElementById('selectCliente');
+  const hidden = document.getElementById('selectCliente');
 
   // Preseleccionar cliente si viene en URL ?cliente=id
   const params = new URLSearchParams(location.search);
   if (params.has('cliente')) {
-    sel.value = params.get('cliente');
-    _actualizarFormVisita(sel);
+    _seleccionarClienteCombo('selectCliente', 'clienteSearchInput', 'clienteDropdown', params.get('cliente'));
+    _actualizarFormVisita(hidden);
   }
 
-  // Actualizar formulario al cambiar cliente
-  sel.addEventListener('change', () => _actualizarFormVisita(sel));
+  hidden.addEventListener('change', () => _actualizarFormVisita(hidden));
 
   document.getElementById('formVisita').addEventListener('submit', guardarVisita);
   document.getElementById('fFecha').value = hoyISO();
 }
 
-async function cargarClientesSelect(selectId) {
-  const sel = document.getElementById(selectId);
-  sel.innerHTML = '<option value="">Cargando...</option>';
+// Configura el combo de búsqueda de clientes
+async function cargarClientesSelect(hiddenId, inputId, dropdownId) {
+  const input    = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hidden   = document.getElementById(hiddenId);
+  if (!input || !dropdown || !hidden) return;
+
+  let todos = [];
   try {
-    const clientes = await dbGetClientes(true);
-    sel.innerHTML = '<option value="">— Selecciona cliente —</option>' +
-      clientes.map(c => {
-        const icono = c.es_cerveza ? '🍺 ' : c.es_telefono ? '📞 ' : '';
-        return `<option value="${c.id}"
-          data-cerveza="${!!c.es_cerveza}"
-          data-telefono="${!!c.es_telefono}"
-        >${c.orden_ruta ? c.orden_ruta + '. ' : ''}${icono}${c.nombre}</option>`;
-      }).join('');
+    todos = await dbGetClientes(true);
   } catch (e) {
-    sel.innerHTML = '<option value="">Error al cargar</option>';
+    input.placeholder = 'Error al cargar clientes';
+    return;
+  }
+
+  function etiqueta(c) {
+    const icono = c.es_cerveza ? '🍺 ' : c.es_telefono ? '📞 ' : '';
+    return `${c.orden_ruta ? c.orden_ruta + '. ' : ''}${icono}${c.nombre}`;
+  }
+
+  function mostrarOpciones(filtro) {
+    const texto = filtro.trim().toLowerCase();
+    const lista = texto
+      ? todos.filter(c => c.nombre.toLowerCase().includes(texto) ||
+                         (c.orden_ruta && String(c.orden_ruta).startsWith(texto)))
+      : todos;
+
+    if (!lista.length) {
+      dropdown.innerHTML = '<div class="select-option no-results">Sin resultados</div>';
+    } else {
+      dropdown.innerHTML = lista.map(c =>
+        `<div class="select-option" data-id="${c.id}"
+              data-cerveza="${!!c.es_cerveza}" data-telefono="${!!c.es_telefono}">
+          <div class="opt-name">${etiqueta(c)}</div>
+        </div>`
+      ).join('');
+      dropdown.querySelectorAll('.select-option[data-id]').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          input.value  = el.querySelector('.opt-name').textContent;
+          hidden.value = el.dataset.id;
+          hidden.dataset.cerveza  = el.dataset.cerveza;
+          hidden.dataset.telefono = el.dataset.telefono;
+          dropdown.classList.remove('open');
+          hidden.dispatchEvent(new Event('change'));
+        });
+      });
+    }
+    dropdown.classList.add('open');
+  }
+
+  input.addEventListener('focus', () => mostrarOpciones(input.value));
+  input.addEventListener('input', () => mostrarOpciones(input.value));
+  input.addEventListener('blur',  () => {
+    // pequeño delay para que el mousedown del option se procese antes
+    setTimeout(() => dropdown.classList.remove('open'), 150);
+  });
+}
+
+// Preselecciona un cliente por ID (usado cuando viene ?cliente= en la URL)
+function _seleccionarClienteCombo(hiddenId, inputId, dropdownId, clienteId) {
+  const dropdown = document.getElementById(dropdownId);
+  const input    = document.getElementById(inputId);
+  const hidden   = document.getElementById(hiddenId);
+  if (!dropdown || !input || !hidden) return;
+
+  // Buscar el option ya pintado
+  const opt = dropdown.querySelector(`.select-option[data-id="${clienteId}"]`);
+  if (opt) {
+    input.value  = opt.querySelector('.opt-name').textContent;
+    hidden.value = clienteId;
+    hidden.dataset.cerveza  = opt.dataset.cerveza;
+    hidden.dataset.telefono = opt.dataset.telefono;
+  } else {
+    // Si el dropdown no está abierto aún, igualmente guardamos el id
+    hidden.value = clienteId;
   }
 }
 
-function _actualizarFormVisita(selectEl) {
-  const opt        = selectEl.options[selectEl.selectedIndex];
-  const esCerveza  = opt?.dataset?.cerveza === 'true';
+function _actualizarFormVisita(hiddenEl) {
+  const esCerveza  = hiddenEl.dataset.cerveza === 'true';
   const wrap       = document.getElementById('importeWrap');
   const nota       = document.getElementById('notaCerveza');
   const cervezaWrap = document.getElementById('cervezaWrap');
 
-  // Cliente cerveza: ocultar importe y el toggle de botella (su "compró" ya es la botella)
-  if (wrap)        wrap.style.display      = esCerveza ? 'none' : 'block';
-  if (nota)        nota.style.display      = esCerveza ? 'block' : 'none';
+  if (wrap)        wrap.style.display       = esCerveza ? 'none' : 'block';
+  if (nota)        nota.style.display       = esCerveza ? 'block' : 'none';
   if (cervezaWrap) cervezaWrap.style.display = esCerveza ? 'none' : 'block';
 }
 
@@ -60,18 +118,22 @@ async function guardarVisita(e) {
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
-  const sel       = document.getElementById('selectCliente');
-  const opt       = sel.options[sel.selectedIndex];
-  const esCerveza = opt?.dataset?.cerveza === 'true';
+  const hidden    = document.getElementById('selectCliente');
+  const esCerveza = hidden.dataset.cerveza === 'true';
   const compro    = document.getElementById('toggleCompro').checked;
 
+  if (!hidden.value) {
+    showToast('Selecciona un cliente', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Guardar visita';
+    return;
+  }
+
   const payload = {
-    cliente_id:     sel.value,
+    cliente_id:     hidden.value,
     fecha:          document.getElementById('fFecha').value,
     compro,
     importe:        esCerveza ? 0 : (parseFloat(document.getElementById('fImporte').value) || 0),
-    // Es cerveza: su "compró" principal ya indica la botella
-    // Cliente normal: usar el toggle específico de botella
     compro_cerveza: esCerveza
       ? compro
       : document.getElementById('toggleCerveza').checked,
@@ -83,7 +145,11 @@ async function guardarVisita(e) {
     showToast('Visita registrada');
     document.getElementById('formVisita').reset();
     document.getElementById('fFecha').value = hoyISO();
-    _actualizarFormVisita(sel); // restaurar visibilidad tras reset
+    // Limpiar combo y restaurar visibilidad
+    document.getElementById('clienteSearchInput').value = '';
+    hidden.value = '';
+    delete hidden.dataset.cerveza;
+    _actualizarFormVisita(hidden);
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -95,14 +161,13 @@ async function guardarVisita(e) {
 // ---- HISTORIAL.HTML -----------------------------------
 
 async function iniciarHistorial() {
-  await cargarClientesSelect('selectClienteHistorial');
+  await cargarClientesSelect('selectClienteHistorial', 'histClienteSearchInput', 'histClienteDropdown');
   document.getElementById('selectClienteHistorial')
     .addEventListener('change', cargarHistorial);
 
-  // Preseleccionar si viene en URL
   const params = new URLSearchParams(location.search);
   if (params.has('cliente')) {
-    document.getElementById('selectClienteHistorial').value = params.get('cliente');
+    _seleccionarClienteCombo('selectClienteHistorial', 'histClienteSearchInput', 'histClienteDropdown', params.get('cliente'));
     cargarHistorial();
   }
 }

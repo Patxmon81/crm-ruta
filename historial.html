@@ -35,10 +35,13 @@
     <!-- Vista: Por cliente -->
     <div id="vistaCliente" style="display:none">
       <div class="form-group">
-        <label for="selectClienteHistorial">Selecciona un cliente</label>
-        <select id="selectClienteHistorial" class="form-control">
-          <option value="">Cargando clientes...</option>
-        </select>
+        <label for="histClienteSearchInput">Selecciona un cliente</label>
+        <div class="select-search" id="histClienteCombo">
+          <input type="text" id="histClienteSearchInput" class="form-control"
+                 placeholder="— Busca un cliente —" autocomplete="off">
+          <div class="select-dropdown" id="histClienteDropdown"></div>
+        </div>
+        <input type="hidden" id="selectClienteHistorial">
       </div>
       <div id="historialContenido"></div>
     </div>

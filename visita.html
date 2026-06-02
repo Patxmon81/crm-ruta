@@ -25,10 +25,13 @@
 
       <!-- Cliente -->
       <div class="form-group">
-        <label for="selectCliente">Cliente *</label>
-        <select id="selectCliente" class="form-control" required>
-          <option value="">Cargando clientes...</option>
-        </select>
+        <label for="clienteSearchInput">Cliente *</label>
+        <div class="select-search" id="clienteCombo">
+          <input type="text" id="clienteSearchInput" class="form-control"
+                 placeholder="— Selecciona o busca cliente —" autocomplete="off">
+          <div class="select-dropdown" id="clienteDropdown"></div>
+        </div>
+        <input type="hidden" id="selectCliente">
       </div>
 
       <!-- Fecha -->

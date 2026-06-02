@@ -630,6 +630,35 @@ tr:hover td { background: rgba(59,130,246,.05); }
 .venta-card .v-val { font-size: 1.1rem; font-weight: 700; color: var(--accent); line-height: 1; }
 .venta-card .v-lbl { font-size: .66rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .05em; }
 
+/* ---- Searchable client selector ---- */
+.select-search   { position: relative; }
+.select-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0; right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  z-index: 60;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  display: none;
+}
+.select-dropdown.open { display: block; }
+.select-option {
+  padding: 11px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(51,65,85,.4);
+  transition: background .1s;
+}
+.select-option:last-child { border-bottom: none; }
+.select-option:hover,
+.select-option.active { background: rgba(59,130,246,.12); }
+.select-option .opt-name { font-weight: 600; font-size: .9rem; }
+.select-option .opt-sub  { font-size: .75rem; color: var(--text-muted); margin-top:1px; }
+.select-option.no-results { color: var(--text-muted); font-size: .85rem; cursor: default; }
+
 /* ============================================================
    RESPONSIVE — mobile-first fixes
    ============================================================ */

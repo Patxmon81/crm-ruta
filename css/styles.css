@@ -669,13 +669,13 @@ html, body  { overflow-x: hidden; max-width: 100%; }
 
 /* Stat y venta values: se adaptan al ancho de la celda */
 .stat-card .stat-val {
-  font-size: clamp(.8rem, 5.5vw, 1.75rem);
-  word-break: break-all;
+  font-size: clamp(.6rem, 3vw, 1.5rem);
+  overflow-wrap: break-word;
   line-height: 1.15;
 }
 .venta-card .v-val {
-  font-size: clamp(.7rem, 4vw, 1.1rem);
-  word-break: break-all;
+  font-size: clamp(.6rem, 3.2vw, 1.1rem);
+  overflow-wrap: break-word;
 }
 
 /* Evitar overflow en flex rows */
